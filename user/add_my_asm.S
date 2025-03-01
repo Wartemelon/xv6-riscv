@@ -12,12 +12,6 @@ err_overflow:.asciz "Buffer size exceeded\n"
 .global main
 
 main: 
-    addi sp, sp, -16
-    sw   s0, 0(sp)
-    sw   s1, 4(sp)
-    sw   s2, 8(sp)
-    sw   s3, 12(sp)
-
     # Считываем всю строку с клавиатуры через gets(buff, BUFF_LEN)
     la a0, buff
     li a1, BUFF_LEN
@@ -109,48 +103,47 @@ end_remove_newline:
     move a1, s2
     call printf
 
-    lw s0, 0(sp)
-    lw s1, 4(sp)
-    lw s2, 8(sp)
-    lw s3, 12(sp)
-    addi sp, sp, 16
-
     # Завершаем программу
     li a7, 2
     li a0, 0
     ecall
 
 error_no_space:
-    la a0, err_no_space
-    call printf
+    li a0, 2
+    la a1, err_no_space
+    call fprintf
     li a7, 2
     li a0, 1
     ecall
 
 error_extra:
-    la a0, err_extra
-    call printf
+    li a0, 2
+    la a1, err_extra
+    call fprintf
     li a7, 2
     li a0, 1
     ecall
 
 error_empty_input:
-    la a0, err_empty_input
-    call printf
+    li a0, 2
+    la a1, err_empty_input
+    call fprintf
     li a7, 2
     li a0, 1
     ecall
 
 error_overflow:
-    la a0, err_overflow
-    call printf
+    li a0, 2
+    la a1, err_overflow
+    call fprintf
     li a7, 2
     li a0, 1
     ecall
 
 error_invalid:
-    la a0, err_invalid
-    call printf
+    li a0, 2
+    la a1, err_invalid
+    call fprintf
     li a7, 2
     li a0, 1
     ecall
