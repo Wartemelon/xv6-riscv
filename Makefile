@@ -141,6 +141,8 @@ UPROGS=\
 	$U/_zombie\
 	$U/_add\
 	$U/_add_my_asm\
+	$U/_1a_1b\
+	$U/_task_2\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
