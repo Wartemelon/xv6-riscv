@@ -12,102 +12,114 @@ int main(int argc, char* argv[]) {
     int pipefd[2];
 
     if (pipe(pipefd) < 0) {
-        fprintf(stderr, "Pipe failed\n");
-        exit(1);
+        perror("pipe failed");
+        exit(EXIT_FAILURE);
     }
 
-    int pid = fork();
+    pid_t pid = fork();
     if (pid < 0) {
-        fprintf(stderr, "Fork failed\n");
+        perror("fork failed");
         close(pipefd[0]);
         close(pipefd[1]);
-        exit(1);
+        exit(EXIT_FAILURE);
     }
 
     if (pid == 0) {
         if (close(pipefd[1]) < 0) {
-            fprintf(stderr, "Error: close(pipefd[1]) failed\n");
-            exit(1);
+            perror("child: close(pipefd[1]) failed");
+            exit(EXIT_FAILURE);
         }
-
         char buffer[BUFF_SIZE];
-        int bytes_read;
-
+        ssize_t bytes_read;
         while ((bytes_read = read(pipefd[0], buffer, BUFF_SIZE)) > 0) {
-            int total_written = 0;
+            ssize_t total_written = 0;
             while (total_written < bytes_read) {
-                int bytes_written = write(1, buffer + total_written, bytes_read - total_written);
+                ssize_t bytes_written = write(STDOUT_FILENO, buffer + total_written, bytes_read - total_written);
                 if (bytes_written < 0) {
-                    fprintf(stderr, "Error: write() failed\n");
-                    exit(1);
+                    perror("child: write failed");
+                    exit(EXIT_FAILURE);
                 }
                 total_written += bytes_written;
             }
         }
-
-        if (close(pipefd[0]) < 0) {  
-            fprintf(stderr, "Error: close(pipefd[0]) failed\n");
-            exit(1);
+        if (bytes_read < 0) {
+            perror("child: read failed");
+            exit(EXIT_FAILURE);
         }
-        exit(0);
-    }
-    else {
         if (close(pipefd[0]) < 0) {
-            fprintf(stderr, "Error: close(pipefd[0]) failed\n");
-            exit(1);
+            perror("child: close(pipefd[0]) failed");
+            exit(EXIT_FAILURE);
         }
-
+        exit(EXIT_SUCCESS);
+    } else {
+        if (close(pipefd[0]) < 0) {
+            perror("parent: close(pipefd[0]) failed");
+            exit(EXIT_FAILURE);
+        }
         char buffer[BUFF_SIZE];
         int offset = 0;
         for (int i = 1; i < argc; i++) {
-            int len = strlen(argv[i]);
-
-            if (len >= BUFF_SIZE) {
-                if (write(pipefd[1], argv[i], len) != len || write(pipefd[1], "\n", 1) != 1) {
-                    fprintf(stderr, "Error: write() failed\n");
+            size_t len = strlen(argv[i]);
+            /*
+             * Если аргумент настолько длинный, что даже при пустом буфере
+             * его длина с добавлением '\n' (len + 1) превышает BUFF_SIZE,
+             * то перед записью сбрасываем накопленный буфер (если он не пуст)
+             * и сразу записываем аргумент и символ новой строки.
+             */
+            if (len + 1 > BUFF_SIZE) {
+                if (offset > 0) {
+                    ssize_t written = write(pipefd[1], buffer, offset);
+                    if (written != offset) {
+                        perror("parent: write failed while flushing buffer");
+                        close(pipefd[1]);
+                        exit(EXIT_FAILURE);
+                    }
+                    offset = 0;
+                }
+                if (write(pipefd[1], argv[i], len) != (ssize_t)len ||
+                    write(pipefd[1], "\n", 1) != 1) {
+                    perror("parent: write failed for long argument");
                     close(pipefd[1]);
-                    exit(1);
+                    exit(EXIT_FAILURE);
                 }
                 continue;
             }
-
-            if (offset + len + 1 >= BUFF_SIZE) {
-                if (write(pipefd[1], buffer, offset) != offset) {
-                    fprintf(stderr, "Error: write() failed\n");
+            /*
+             * Если текущий аргумент (с '\n') не помещается в оставшуюся часть буфера,
+             * сбрасываем буфер в канал.
+             */
+            if (offset + len + 1 > BUFF_SIZE) {
+                ssize_t written = write(pipefd[1], buffer, offset);
+                if (written != offset) {
+                    perror("parent: write failed while flushing buffer");
                     close(pipefd[1]);
-                    exit(1);
+                    exit(EXIT_FAILURE);
                 }
                 offset = 0;
             }
+            // Копируем аргумент в буфер
             memcpy(buffer + offset, argv[i], len);
             offset += len;
-
-            if (offset + 1 >= BUFF_SIZE) {
-                if (write(pipefd[1], buffer, offset) != offset) {
-                    fprintf(stderr, "Error: write() failed\n");
-                    close(pipefd[1]);
-                    exit(1);
-                }
-                offset = 0;
-            }
+            // Добавляем символ новой строки
             buffer[offset++] = '\n';
         }
-
+        // Если в буфере ещё что-то осталось, сбрасываем его в канал
         if (offset > 0) {
-            if (write(pipefd[1], buffer, offset) != offset) {
-                fprintf(stderr, "Error: write() failed\n");
+            ssize_t written = write(pipefd[1], buffer, offset);
+            if (written != offset) {
+                perror("parent: write failed during final flush");
                 close(pipefd[1]);
-                exit(1);
+                exit(EXIT_FAILURE);
             }
         }
 
         if (close(pipefd[1]) < 0) {
-            fprintf(stderr, "Error: close(pipefd[1]) failed\n");
-            exit(1);
+            perror("parent: close(pipefd[1]) failed");
+            exit(EXIT_FAILURE);
         }
 
         wait(0); 
     }
 
-    exit(0);
+    return EXIT_SUCCESS;
 }

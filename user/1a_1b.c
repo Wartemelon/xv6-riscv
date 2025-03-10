@@ -31,7 +31,10 @@ int task_1b() {
     }
     else {
         printf("Parent PID: %d, Child PID: %d\n", getpid(), pid);
-        kill(pid);
+        if (kill(pid) < 0) {
+            perror("kill failed");
+            exit(1);
+        }
         int status;
         int waited_pid = wait(&status);
         printf("Killed Child PID: %d exited with status %d\n", waited_pid, status);
