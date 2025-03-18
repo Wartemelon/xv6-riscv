@@ -5,6 +5,7 @@
 #include "memlayout.h"
 #include "spinlock.h"
 #include "proc.h"
+#include "procinfo.h"
 
 uint64
 sys_exit(void)
@@ -99,4 +100,14 @@ sys_add(void) {
 	argint(1, &arg2);
 
 	return arg1 + arg2;
+}
+
+uint64
+sys_ps_listinfo(void) {
+  uint64 u_plist;
+  int lim;
+  argaddr(0, &u_plist);
+  argint(1, &lim);
+
+  return ps_listinfo(u_plist, lim);
 }

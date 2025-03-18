@@ -36,4 +36,5 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
-entry("add")
+entry("add");
+entry("ps_listinfo");

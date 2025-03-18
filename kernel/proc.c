@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "procinfo.h"
 
 struct cpu cpus[NCPU];
 
@@ -692,4 +693,74 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+ps_listinfo(uint64 u_plist, int lim)
+{
+  struct proc *p;
+
+  if (u_plist == 0) {
+    int count = 0;
+    for (p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if (p->state != UNUSED)
+        count++;
+      release(&p->lock);
+    }
+    return count;
+  }
+
+  int total = 0;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->state != UNUSED) {
+      total++;
+    }
+    release(&p->lock);
+  }
+
+  if (total > lim) {
+    return -2;
+  }
+
+  acquire(&wait_lock);
+
+  int copied = 0;
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->state != UNUSED) {
+      struct procinfo info;
+      info.pid = p->pid;
+      safestrcpy(info.name, p->name, sizeof(info.name));
+      info.state = p->state;
+
+      if (p->parent) {
+        info.ppid = p->parent->pid;
+        acquire(&p->parent->lock);
+        safestrcpy(info.parent_name, p->parent->name, sizeof(info.parent_name));
+        release(&p->parent->lock);
+      } 
+      else {
+        info.ppid = 0;
+        safestrcpy(info.parent_name, "<no parent>", sizeof(info.parent_name));
+      }
+
+      if (copyout(myproc()->pagetable,
+                 u_plist + copied*sizeof(struct procinfo),
+                 (char *)&info,
+                 sizeof(info)) < 0)
+      {
+        release(&p->lock);
+        release(&wait_lock);
+        return -3;
+      }
+
+      copied++;
+    }
+    release(&p->lock);
+  }
+
+  release(&wait_lock);
+  return copied;
 }
