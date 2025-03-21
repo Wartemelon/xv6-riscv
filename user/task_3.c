@@ -8,6 +8,18 @@
 
 #define BUFF_SIZE 4096
 
+ssize_t full_write(int fd, const void *buf, size_t count) {
+    size_t total = 0;
+    while (total < count) {
+        ssize_t written = write(fd, (const char*)buf + total, count - total);
+        if (written < 0) {
+            return written;
+        }
+        total += written;
+    }
+    return total;
+}
+
 int main(int argc, char* argv[]) {
     int pipefd[2];
 
@@ -68,7 +80,7 @@ int main(int argc, char* argv[]) {
              */
             if (len + 1 > BUFF_SIZE) {
                 if (offset > 0) {
-                    ssize_t written = write(pipefd[1], buffer, offset);
+                    ssize_t written = full_write(pipefd[1], buffer, offset);
                     if (written != offset) {
                         perror("parent: write failed while flushing buffer");
                         close(pipefd[1]);
@@ -76,8 +88,8 @@ int main(int argc, char* argv[]) {
                     }
                     offset = 0;
                 }
-                if (write(pipefd[1], argv[i], len) != (ssize_t)len ||
-                    write(pipefd[1], "\n", 1) != 1) {
+                if (full_write(pipefd[1], argv[i], len) != len ||
+                    full_write(pipefd[1], "\n", 1) != 1) {
                     perror("parent: write failed for long argument");
                     close(pipefd[1]);
                     exit(EXIT_FAILURE);
@@ -89,7 +101,7 @@ int main(int argc, char* argv[]) {
              * сбрасываем буфер в канал.
              */
             if (offset + len + 1 > BUFF_SIZE) {
-                ssize_t written = write(pipefd[1], buffer, offset);
+                ssize_t written = full_write(pipefd[1], buffer, offset);
                 if (written != offset) {
                     perror("parent: write failed while flushing buffer");
                     close(pipefd[1]);
@@ -105,7 +117,7 @@ int main(int argc, char* argv[]) {
         }
         // Если в буфере ещё что-то осталось, сбрасываем его в канал
         if (offset > 0) {
-            ssize_t written = write(pipefd[1], buffer, offset);
+            ssize_t written = full_write(pipefd[1], buffer, offset);
             if (written != offset) {
                 perror("parent: write failed during final flush");
                 close(pipefd[1]);

@@ -2,6 +2,18 @@
 
 #define BUFF_SIZE 512
 
+int full_write(int fd, const void *buf, int count) {
+    int total = 0;
+    while (total < count) {
+        int written = write(fd, (const char*)buf + total, count - total);
+        if (written < 0) {
+            return written;
+        }
+        total += written;
+    }
+    return total;
+}
+
 int main(int argc, char* argv[]) {
     int pipefd[2];
 
@@ -54,7 +66,8 @@ int main(int argc, char* argv[]) {
             int len = strlen(argv[i]);
 
             if (len >= BUFF_SIZE) {
-                if (write(pipefd[1], argv[i], len) != len || write(pipefd[1], "\n", 1) != 1) {
+                if (full_write(pipefd[1], argv[i], len) != len ||
+                    full_write(pipefd[1], "\n", 1) != 1) {
                     fprintf(2, "Error: write() failed\n");
                     close(pipefd[1]);
                     exit(1);
@@ -63,7 +76,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (offset + len + 1 >= BUFF_SIZE) {
-                if (write(pipefd[1], buffer, offset) != offset) {
+                if (full_write(pipefd[1], buffer, offset) != offset) {
                     fprintf(2, "Error: write() failed\n");
                     close(pipefd[1]);
                     exit(1);
@@ -74,7 +87,7 @@ int main(int argc, char* argv[]) {
             offset += len;
 
             if (offset + 1 >= BUFF_SIZE) {
-                if (write(pipefd[1], buffer, offset) != offset) {
+                if (full_write(pipefd[1], buffer, offset) != offset) {
                     fprintf(2, "Error: write() failed\n");
                     close(pipefd[1]);
                     exit(1);
@@ -85,7 +98,7 @@ int main(int argc, char* argv[]) {
         }
 
         if (offset > 0) {
-            if (write(pipefd[1], buffer, offset) != offset) {
+            if (full_write(pipefd[1], buffer, offset) != offset) {
                 fprintf(2, "Error: write() failed\n");
                 close(pipefd[1]);
                 exit(1);
