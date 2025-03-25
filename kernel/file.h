@@ -1,5 +1,14 @@
+#ifndef FILE_H
+#define FILE_H
+
+#include "sleeplock.h"
+#include "spinlock.h"
+#include "fs.h"
+
+struct mutex;
+
 struct file {
-  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE } type;
+  enum { FD_NONE, FD_PIPE, FD_INODE, FD_DEVICE, FD_MUTEX } type;
   int ref; // reference count
   char readable;
   char writable;
@@ -7,6 +16,8 @@ struct file {
   struct inode *ip;  // FD_INODE and FD_DEVICE
   uint off;          // FD_INODE
   short major;       // FD_DEVICE
+
+  struct mutex *mtx; // FD_MUTEX
 };
 
 #define major(dev)  ((dev) >> 16 & 0xFFFF)
@@ -38,3 +49,5 @@ struct devsw {
 extern struct devsw devsw[];
 
 #define CONSOLE 1
+
+#endif

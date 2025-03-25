@@ -12,6 +12,7 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
+#include "mutex.h"
 
 struct devsw devsw[NDEV];
 struct {
@@ -80,6 +81,9 @@ fileclose(struct file *f)
     iput(ff.ip);
     end_op();
   }
+  else if(ff.type == FD_MUTEX){
+    mutexclose(&ff);
+  }
 }
 
 // Get metadata about file f.
@@ -111,6 +115,10 @@ fileread(struct file *f, uint64 addr, int n)
   if(f->readable == 0)
     return -1;
 
+  if(f->type == FD_MUTEX){
+    return -1;
+  }
+
   if(f->type == FD_PIPE){
     r = piperead(f->pipe, addr, n);
   } else if(f->type == FD_DEVICE){
@@ -138,6 +146,10 @@ filewrite(struct file *f, uint64 addr, int n)
 
   if(f->writable == 0)
     return -1;
+
+  if(f->type == FD_MUTEX){
+    return -1;
+  }
 
   if(f->type == FD_PIPE){
     ret = pipewrite(f->pipe, addr, n);
