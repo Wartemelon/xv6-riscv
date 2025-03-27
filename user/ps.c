@@ -4,20 +4,15 @@
 
 static char *
 procstate2str(int state) {
-    switch (state)
-    {
-    case 0:
-        return "UNUSED";
-    case 1:
-        return "SLEEP";
-    case 2:
-        return "RUNNABLE";
-    case 3:
-        return "RUNNING";
-    case 4:
-        return "ZOMBIE";
-    }
-    return "???";
+  switch(state) {
+  case 0: return "UNUSED  ";
+  case 1: return "USED    ";
+  case 2: return "SLEEPING";
+  case 3: return "RUNNABLE";
+  case 4: return "RUNNING ";
+  case 5: return "ZOMBIE  ";
+  default: return "???    ";
+  }
 }
 
 int main(int argc, char *argv[]) {

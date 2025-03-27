@@ -4,7 +4,7 @@
 #include "kernel/procinfo.h"
 
 int main(int argc, char *argv[]) {
-    int count, ret;
+    int count, ret, lim;
     struct procinfo *buf;
 
     // Тест 1: Получение количества процессов
@@ -28,22 +28,34 @@ int main(int argc, char *argv[]) {
     free(buf);
 
     // Тест 3: Нормальный случай
-    int lim = count;
-    buf = malloc(lim * sizeof(struct procinfo));
-    if (buf == 0) {
-        printf("Test 3: Memory allocation failed for normal buffer\n");
-        exit(1);
-    }
-    ret = ps_listinfo(buf, lim);
-    if (ret < 0) {
-        printf("Test 3: Normal test failed with error %d\n", ret);
-    }
-    else {
-        printf("Test 3: Normal test succeeded. Retrieved %d entries.\n", ret);
-        for (int i = 0; i < ret; i++) {
-            printf("PID: %d, Name: %s, State: %d, PPID: %d, Parent: %s\n",
-                   buf[i].pid, buf[i].name, buf[i].state, buf[i].ppid, buf[i].parent_name);
+    lim = count;
+    while (1) {
+        buf = malloc(lim * sizeof(struct procinfo));
+        if (buf == 0) {
+            printf("Test 3: Memory allocation failed for buffer size %d\n", lim);
+            exit(1);
         }
+        ret = ps_listinfo(buf, lim);
+        if (ret >= 0 && ret <= lim) {
+            break;
+        }
+        // Здесь увеличиваем, если недостаточно места 
+        free(buf);
+        if (ret == -2) {
+            lim *= 2;
+        }
+        else if (ret > lim) {
+            lim = ret;
+        }
+        else {
+            printf("Test 3: Normal test failed with error %d\n", ret);
+            exit(1);
+        }
+    }
+    printf("Test 3: Normal test succeeded. Retrieved %d entries.\n", ret);
+    for (int i = 0; i < ret; i++) {
+        printf("PID: %d, Name: %s, State: %d, PPID: %d, Parent: %s\n",
+               buf[i].pid, buf[i].name, buf[i].state, buf[i].ppid, buf[i].parent_name);
     }
     free(buf);
 

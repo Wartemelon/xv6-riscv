@@ -704,42 +704,33 @@ ps_listinfo(uint64 u_plist, int lim)
     int count = 0;
     for (p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
-      if (p->state != UNUSED)
+      if (p->state != UNUSED && p->state != USED)
         count++;
       release(&p->lock);
     }
     return count;
   }
 
-  int total = 0;
-  for (p = proc; p < &proc[NPROC]; p++) {
-    acquire(&p->lock);
-    if (p->state != UNUSED) {
-      total++;
-    }
-    release(&p->lock);
-  }
-
-  if (total > lim) {
-    return -2;
-  }
-
-  acquire(&wait_lock);
-
   int copied = 0;
   for (p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if (p->state != UNUSED) {
+    if (p->state != UNUSED && p->state != USED) {
+      if (copied >= lim) {
+        release(&p->lock);
+        return -2;
+      }
       struct procinfo info;
       info.pid = p->pid;
       safestrcpy(info.name, p->name, sizeof(info.name));
       info.state = p->state;
 
       if (p->parent) {
-        info.ppid = p->parent->pid;
+        acquire(&wait_lock);
         acquire(&p->parent->lock);
+        info.ppid = p->parent->pid;
         safestrcpy(info.parent_name, p->parent->name, sizeof(info.parent_name));
         release(&p->parent->lock);
+        release(&wait_lock);
       } 
       else {
         info.ppid = 0;
@@ -749,10 +740,8 @@ ps_listinfo(uint64 u_plist, int lim)
       if (copyout(myproc()->pagetable,
                  u_plist + copied*sizeof(struct procinfo),
                  (char *)&info,
-                 sizeof(info)) < 0)
-      {
+                 sizeof(info)) < 0) {
         release(&p->lock);
-        release(&wait_lock);
         return -3;
       }
 
@@ -761,6 +750,5 @@ ps_listinfo(uint64 u_plist, int lim)
     release(&p->lock);
   }
 
-  release(&wait_lock);
   return copied;
 }
