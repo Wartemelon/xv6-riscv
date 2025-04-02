@@ -36,4 +36,6 @@ entry("getpid");
 entry("sbrk");
 entry("sleep");
 entry("uptime");
-entry("add")
+entry("add");
+entry("pgtableinfo");
+entry("clr_pgflags");

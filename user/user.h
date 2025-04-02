@@ -25,6 +25,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int add(int a, int b);
+uint pgtableinfo(uint64, uint64, uint);
+uint clr_pgflags(uint64, uint64, uint);
 
 // ulib.c
 int stat(const char*, struct stat*);

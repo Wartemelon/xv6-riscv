@@ -100,3 +100,125 @@ sys_add(void) {
 
 	return arg1 + arg2;
 }
+
+
+#define PGINFO_FL_D 0x1
+#define PGINFO_FL_A 0x2
+extern void cprintf(const char*, ...);
+
+void 
+get_pgtableinfo(pagetable_t pagetable, int level, uint64 start, uint64 end, int flags) {
+  for (int i = 0; i < NPTENTRIES; i++) {
+      uint64 va = ((uint64)i) << (PGSHIFT + level * 9);
+      if (va + PGSIZE <= start || va >= end) {
+        continue;
+      }
+
+      pte_t pte = pagetable[i];
+      if (!(pte & PTE_V)) {
+        continue;
+      }
+      if ((pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+        get_pgtableinfo((pagetable_t)PTE2PA(pte), level - 1, start, end, flags);
+        continue;
+      }
+      if (flags) {
+        if ((flags & PGINFO_FL_D) && !(pte & PTE_D)) {
+          continue;
+        }
+        if ((flags & PGINFO_FL_A) && !(pte & PTE_A)) {
+          continue;
+        }
+      }
+      for (int j = 0; j < (level + 1) * 9; j++) {
+        printf(".");
+      }
+      printf("0x%03x -> %p ", i, (void*)PTE2PA(pte));
+      printf("%c", (pte & PTE_R) ? 'R' : '_');
+      printf("%c", (pte & PTE_W) ? 'W' : '_');
+      printf("%c", (pte & PTE_X) ? 'X' : '_');
+      printf("%c", (pte & PTE_U) ? 'U' : '_');
+      printf("%c", (pte & PTE_G) ? 'G' : '_');
+      printf("%c", (pte & PTE_A) ? 'A' : '_');
+      printf("%c\n", (pte & PTE_D) ? 'D' : '_');
+  } 
+}
+
+uint64
+sys_pgtableinfo(void) {
+  uint64 buf, buflen;
+  int flags;
+  argaddr(0, &buf);
+  argaddr(1, &buflen);
+  argint(2, &flags);
+
+  uint64 start, end;
+  if (buf == 0 || buflen == 0) {
+    start = 0;
+    end = MAXVA;
+  }
+  else {
+    start = PGROUNDDOWN(buf);
+    end = PGROUNDUP(buf + buflen);
+  }
+  printf("PAGETABLE %p\n", (void*)PTE2PA(*walk(myproc()->pagetable, start, 0)));
+  get_pgtableinfo(myproc()->pagetable, 2, start, end, flags);
+  return 0;
+}
+
+#define PGFLAGCLEAR_D 0x1
+#define PGFLAGCLEAR_A 0x2
+
+int 
+clear_pgflags(pagetable_t pagetable, int level, uint64 start, uint64 end, int flags) {
+  for (int i = 0; i < NPTENTRIES; i++) {
+    uint64 va = ((uint64)i) << (PGSHIFT + level * 9);
+    if (va + PGSIZE <= start || va >= end) {
+      continue;
+    }
+
+    pte_t *pte = &pagetable[i];
+    if (!(*pte & PTE_V)) {
+      continue;
+    }
+    if ((*pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+      int r = clear_pgflags((pagetable_t)PTE2PA(*pte), level - 1, start, end, flags);
+      if (r != 0) {
+        return r;
+      }
+      continue;
+    }
+
+    if (flags & PGFLAGCLEAR_D) {
+      *pte &= ~PTE_D;
+    }
+    if (flags & PGFLAGCLEAR_A) {
+      *pte &= ~PTE_A;
+    }
+    sfence_vma();
+  }
+  return 0;
+}
+
+uint64
+sys_clr_pgflags(void) {
+  uint64 buf, buflen;
+  int flags;
+  argaddr(0, &buf);
+  argaddr(1, &buflen);
+  argint(2, &flags);
+  
+  if (flags & ~(PGFLAGCLEAR_D | PGFLAGCLEAR_A)) {
+    return -1;
+  }
+  uint64 start, end;
+  if (buf == 0 || buflen == 0) {
+    start = 0;
+    end = MAXVA;
+  }
+  else {
+    start = PGROUNDDOWN(buf);
+    end = PGROUNDUP(buf + buflen);
+  }
+  return clear_pgflags(myproc()->pagetable, 2, start, end, flags);
+}
