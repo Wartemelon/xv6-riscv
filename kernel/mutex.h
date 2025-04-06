@@ -3,6 +3,7 @@
 
 struct mutex {
   struct sleeplock lock;
+  struct spinlock owner_lock;
   int owner;
 };
 

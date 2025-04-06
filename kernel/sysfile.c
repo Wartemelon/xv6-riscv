@@ -531,7 +531,9 @@ sys_mutex_lock(void)
     return -1;
 
   acquiresleep(&f->mtx->lock);
+  acquire(&f->mtx->owner_lock);
   f->mtx->owner = myproc()->pid;
+  release(&f->mtx->owner_lock);
   return 0;
 }
 
@@ -545,11 +547,14 @@ sys_mutex_unlock(void)
   if(!f || f->type != FD_MUTEX)
     return -1;
 
+  acquire(&f->mtx->owner_lock);
   if(f->mtx->owner != myproc()->pid){
+    release(&f->mtx->owner_lock);
     return -1;
   }
 
   f->mtx->owner = -1;
+  release(&f->mtx->owner_lock);
   releasesleep(&f->mtx->lock);
   return 0;
 }

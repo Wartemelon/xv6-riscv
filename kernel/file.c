@@ -66,6 +66,14 @@ fileclose(struct file *f)
   if(f->ref < 1)
     panic("fileclose");
   if(--f->ref > 0){
+    if(f->type == FD_MUTEX){
+      acquire(&f->mtx->owner_lock);
+      if(f->mtx->owner == myproc()->pid){
+        releasesleep(&f->mtx->lock);
+        f->mtx->owner = -1;
+      }
+      release(&f->mtx->owner_lock);
+    }
     release(&ftable.lock);
     return;
   }
