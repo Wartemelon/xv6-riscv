@@ -34,6 +34,15 @@ main(int argc, char *argv[])
   printf("\n=== [2] After allocating %d pages (total %d bytes) ===\n", npages, size);
   pgtableinfo(0, 0, 0);
   printf("\n=== [3] Clear bits A and D for ALL pages ===\n");
+  /*
+  * Тут стоит заметить одну интересную вещь при выводе - повторное появление флагов A и D.
+  * Для себя я это объясняю так:
+  * даже после вызова clr_pgflags и сброса битов A и D,
+  * в момент следующих обращений к памяти (например, при выполнении printf или других операций)
+  * процессор автоматически устанавливает флаг A, а при записи – флаг D.
+  * То есть, если между вызовом clr_pgflags и выводом информации происходит обращение к памяти,
+  * аппарат сразу же заново устанавливает эти флаги
+  */
   clr_pgflags(0, 0, PGFLAGCLEAR_A | PGFLAGCLEAR_D);
   pgtableinfo(0, 0, 0);
   int sum = gvar + localvar + stackarr[10] + (int)heaparr[5];
