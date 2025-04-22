@@ -25,6 +25,7 @@
 // there should be one superblock per disk device, but we run with
 // only one device
 struct superblock sb; 
+extern struct devsw devsw[];
 
 // Read the super block.
 static void
