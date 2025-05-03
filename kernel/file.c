@@ -12,12 +12,14 @@
 #include "file.h"
 #include "stat.h"
 #include "proc.h"
-#include <stdint.h> 
 
 #define PSEUDO_MAJOR 2
 
-static uint64_t urandom_seed = 88005553535ULL;
-static uint64_t nullstat_count = 0;
+static uint64 urandom_seed = 88005553535ULL;
+static struct spinlock urandom_lock;
+static uint64 nullstat_count = 0;
+static struct spinlock nullstat_lock;
+static char buf[PGSIZE];
 
 static unsigned char
 lcg_byte(void) {
@@ -27,25 +29,28 @@ lcg_byte(void) {
 
 static int
 pseudo_read(int dev, uint64 dst, int n) {
+  if(n > PGSIZE) return -1;
   int mi = minor(dev);
-  char buf[n];
-  int i;
 
   switch(mi) {
   case 0:  // /dev/null
     return 0;
   case 1:  // /dev/zero
-    for(i = 0; i < n; i++) buf[i] = 0;
+    memset(buf, 0, n);
     either_copyout(1, dst, buf, n);
     return n;
   case 2:  // /dev/urandom
-    for(i = 0; i < n; i++) buf[i] = lcg_byte();
+    acquire(&urandom_lock);
+    for(int i = 0; i < n; i++) buf[i] = lcg_byte();
+    release(&urandom_lock);
     either_copyout(1, dst, buf, n);
     return n;
   case 3:  // /dev/nullstat
     if(n != sizeof(nullstat_count))
       return -1;
+    acquire(&nullstat_lock);
     memmove(buf, &nullstat_count, n);
+    release(&nullstat_lock);
     either_copyout(1, dst, buf, n);
     return n;
   default:
@@ -55,9 +60,8 @@ pseudo_read(int dev, uint64 dst, int n) {
 
 static int
 pseudo_write(int dev, uint64 src, int n) {
+  if(n > PGSIZE) return -1;
   int mi = minor(dev);
-  char buf[n];
-  int r;
 
   switch(mi) {
   case 0:  // /dev/null
@@ -67,12 +71,18 @@ pseudo_write(int dev, uint64 src, int n) {
   case 2:  // /dev/urandom — смена seed
     if(n != sizeof(urandom_seed))
       return -1;
-    r = either_copyin(buf, 1, src, n);
-    if(r < 0) return r;
+    acquire(&urandom_lock);
+    if(either_copyin(buf, 1, src, n) < 0){
+      release(&urandom_lock);
+      return -1;
+    }
     memmove(&urandom_seed, buf, n);
+    release(&urandom_lock);
     return n;
   case 3:  // /dev/nullstat
+    acquire(&nullstat_lock);
     nullstat_count += n;
+    release(&nullstat_lock);
     return n;
   default:
     return -1;
@@ -90,6 +100,8 @@ void
 fileinit(void)
 {
   initlock(&ftable.lock, "ftable");
+  initlock(&urandom_lock, "urandom");
+  initlock(&nullstat_lock, "nullstat");
 
   devsw[PSEUDO_MAJOR].read  = pseudo_read;
   devsw[PSEUDO_MAJOR].write = pseudo_write;
