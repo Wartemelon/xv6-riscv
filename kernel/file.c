@@ -29,29 +29,48 @@ lcg_byte(void) {
 
 static int
 pseudo_read(int dev, uint64 dst, int n) {
-  if(n > PGSIZE) return -1;
   int mi = minor(dev);
+  int total = 0;
+  int chunk;
 
   switch(mi) {
   case 0:  // /dev/null
     return 0;
   case 1:  // /dev/zero
-    memset(buf, 0, n);
-    either_copyout(1, dst, buf, n);
-    return n;
+    while (n > 0) {
+      chunk = n > PGSIZE ? PGSIZE : n;
+      memset(buf, 0, chunk);
+      if (either_copyout(1, dst + total, buf, chunk) < 0)
+        return -1;
+      total += chunk;
+      n -= chunk;
+    }
+    return total;
   case 2:  // /dev/urandom
     acquire(&urandom_lock);
-    for(int i = 0; i < n; i++) buf[i] = lcg_byte();
+    while (n > 0) {
+      chunk = n > PGSIZE ? PGSIZE : n;
+      for(int i = 0; i < chunk; i++) {
+        buf[i] = lcg_byte();
+      }
+      if (either_copyout(1, dst + total, buf, chunk) < 0) {
+        release(&urandom_lock);
+        return -1;
+      }
+      total += chunk;
+      n -= chunk;
+    }
     release(&urandom_lock);
-    either_copyout(1, dst, buf, n);
-    return n;
+    return total;
   case 3:  // /dev/nullstat
     if(n != sizeof(nullstat_count))
       return -1;
     acquire(&nullstat_lock);
     memmove(buf, &nullstat_count, n);
     release(&nullstat_lock);
-    either_copyout(1, dst, buf, n);
+    if (either_copyout(1, dst, buf, n) < 0) {
+      return -1;
+    }
     return n;
   default:
     return -1;
@@ -60,7 +79,6 @@ pseudo_read(int dev, uint64 dst, int n) {
 
 static int
 pseudo_write(int dev, uint64 src, int n) {
-  if(n > PGSIZE) return -1;
   int mi = minor(dev);
 
   switch(mi) {
